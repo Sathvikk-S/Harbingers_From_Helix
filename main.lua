@@ -1,5 +1,6 @@
 -- main.lua
 
+-- Declare variables and tables
 local player
 local playerSpeed = 200
 local gravity = 800  -- Increased gravity for faster falling
@@ -10,16 +11,28 @@ local background
 local groundImage
 local playerImage
 local coinImage
+local plantImage
 local cameraX = 0 -- Camera position
 local coins = {}  -- Table to hold coins
 local coinCount = 0  -- Track the number of coins collected
+local plant = nil  -- Table to hold plant data
+local plantCollected = false  -- Track if the plant has been collected
+
+-- Optional: Load sounds
+-- local collectSound
+-- local plantSound
 
 function love.load()
     -- Load images
     background = love.graphics.newImage("background.png")
     groundImage = love.graphics.newImage("ground.png")
     playerImage = love.graphics.newImage("player.png")
-    coinImage = love.graphics.newImage("garbage.png")  -- Load the coin image
+    coinImage = love.graphics.newImage("coin.png")  -- Load the coin image
+    plantImage = love.graphics.newImage("plant.png")  -- Load the plant image
+
+    -- Optional: Load sounds
+    -- collectSound = love.audio.newSource("collect.wav", "static")
+    -- plantSound = love.audio.newSource("plant_collect.wav", "static")
 
     -- Initialize player properties
     player = {
@@ -35,7 +48,7 @@ function love.load()
     groundY = love.graphics.getHeight() - groundImage:getHeight()
 
     -- Create coins at specific positions on the ground
-    local numberOfCoins = 5  -- Number of coins to spawn
+    local numberOfCoins = 10  -- Total coins to spawn
     for i = 1, numberOfCoins do
         local coin = {
             x = math.random(50, background:getWidth() - 50),  -- Random x position within the background width
@@ -89,7 +102,26 @@ function love.update(dt)
         if not coin.collected and checkCollision(player, coin) then
             coin.collected = true  -- Mark coin as collected
             coinCount = coinCount + 1  -- Increase coin count
+            -- Optional: Play collect sound
+            -- love.audio.play(collectSound)
+            print("Coin collected! Total coins:", coinCount)
+
+            -- Check if coinCount reached 5 and plant hasn't been spawned yet
+            if coinCount == 5 and not plant then
+                spawnPlant()
+                -- Optional: Reset coin count if you want multiple plant spawns
+                -- coinCount = 0
+            end
         end
+    end
+
+    -- Check for plant collection
+    if plant and not plantCollected and checkCollision(player, plant) then
+        plantCollected = true  -- Mark plant as collected
+        -- Optional: Play plant collect sound
+        -- love.audio.play(plantSound)
+        -- Optional: Provide additional rewards or feedback
+        print("Plant collected! You earned a bonus!")
     end
 end
 
@@ -113,6 +145,11 @@ function love.draw()
         end
     end
 
+    -- Draw plant if it exists and hasn't been collected
+    if plant and not plantCollected then
+        love.graphics.draw(plantImage, plant.x - cameraX, plant.y)
+    end
+
     -- Draw player with camera offset
     if player.facingRight then
         love.graphics.draw(playerImage, player.x - cameraX, player.y)
@@ -122,7 +159,13 @@ function love.draw()
 
     -- Display the coin count
     love.graphics.setColor(1, 1, 1) -- Set color to white
-    love.graphics.print("Garbage collected: " .. coinCount, 10, 10)  -- Display coin count at the top left
+    love.graphics.print("Coins: " .. coinCount, 10, 10)  -- Display coin count at the top left
+
+    -- Optional: Display plant collection message
+    if plantCollected then
+        -- love.graphics.setColor(0, 1, 0) -- Green color
+        love.graphics.print("Plant collected! Bonus awarded!", 10, 30)
+    end
 end
 
 function love.keyreleased(key)
@@ -132,10 +175,29 @@ function love.keyreleased(key)
     end
 end
 
--- Function to check for collision between player and coins
+-- Function to check for collision between two rectangles
 function checkCollision(a, b)
     return a.x < b.x + b.width and
            a.x + a.width > b.x and
            a.y < b.y + b.height and
            a.y + a.height > b.y
+end
+
+-- Function to spawn the plant on the ground as a reward
+function spawnPlant()
+    print("Spawning plant as a reward!")
+
+    -- Choose a position ahead of the player within the background bounds
+    local plantX = player.x + 200  -- Plant appears 200 pixels ahead of the player
+    if plantX > background:getWidth() - 50 then
+        plantX = background:getWidth() - 50  -- Ensure plant doesn't spawn beyond background
+    end
+
+    plant = {
+        x = plantX,
+        y = groundY - plantImage:getHeight(),  -- Position plant on the ground
+        width = plantImage:getWidth(),
+        height = plantImage:getHeight(),
+        collected = false  -- Track if the plant is collected
+    }
 end
