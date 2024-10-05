@@ -12,11 +12,16 @@ local groundImage
 local playerImage
 local coinImage
 local plantImage
+local spaceshipImage  -- Declare variable for spaceship image
 local cameraX = 0 -- Camera position
 local coins = {}  -- Table to hold coins
 local coinCount = 0  -- Track the number of coins collected
 local plant = nil  -- Table to hold plant data
-local plantCollected = false  -- Track if the plant has been collected
+-- local plantCollected = false  -- Removed to support multiple plants
+local spaceship = nil  -- Table to hold spaceship data
+
+-- New variables for plant collection
+local plantCount = 0  -- Track the number of plants collected
 
 -- Optional: Load sounds
 -- local collectSound
@@ -29,6 +34,7 @@ function love.load()
     playerImage = love.graphics.newImage("player.png")
     coinImage = love.graphics.newImage("coin.png")  -- Load the coin image
     plantImage = love.graphics.newImage("plant.png")  -- Load the plant image
+    spaceshipImage = love.graphics.newImage("spaceship.png")  -- Load the spaceship image
 
     -- Optional: Load sounds
     -- collectSound = love.audio.newSource("collect.wav", "static")
@@ -43,7 +49,7 @@ function love.load()
         velocityY = 0,  -- Vertical velocity for jumping
         facingRight = true  -- Track which direction the player is facing
     }
-    
+
     -- Calculate groundY based on ground image height
     groundY = love.graphics.getHeight() - groundImage:getHeight()
 
@@ -59,6 +65,14 @@ function love.load()
         }
         table.insert(coins, coin)  -- Add coin to the coins table
     end
+
+    -- Spawn spaceship on the ground near the player's spawn point
+    spaceship = {
+        x = 20,  -- Position the spaceship horizontally
+        y = 305,  -- Position it on the ground
+        width = spaceshipImage:getWidth(),
+        height = spaceshipImage:getHeight(),
+    }
 end
 
 function love.update(dt)
@@ -107,7 +121,7 @@ function love.update(dt)
             print("Coin collected! Total coins:", coinCount)
 
             -- Check if coinCount reached 5 and plant hasn't been spawned yet
-            if coinCount == 5 and not plant then
+            if coinCount%5 == 0 and not plant then
                 spawnPlant()
                 -- Optional: Reset coin count if you want multiple plant spawns
                 -- coinCount = 0
@@ -116,12 +130,14 @@ function love.update(dt)
     end
 
     -- Check for plant collection
-    if plant and not plantCollected and checkCollision(player, plant) then
-        plantCollected = true  -- Mark plant as collected
+    if plant and checkCollision(player, plant) then
+        plantCount = plantCount + 1  -- Increment the plant count
+        -- Remove the collected plant
+        plant = nil
         -- Optional: Play plant collect sound
         -- love.audio.play(plantSound)
         -- Optional: Provide additional rewards or feedback
-        print("Plant collected! You earned a bonus!")
+        print("Plant collected! Total plants:", plantCount)
     end
 end
 
@@ -145,9 +161,14 @@ function love.draw()
         end
     end
 
-    -- Draw plant if it exists and hasn't been collected
-    if plant and not plantCollected then
+    -- Draw plant if it exists
+    if plant then
         love.graphics.draw(plantImage, plant.x - cameraX, plant.y)
+    end
+
+    -- Draw spaceship on the ground
+    if spaceship then
+        love.graphics.draw(spaceshipImage, spaceship.x - cameraX, spaceship.y)
     end
 
     -- Draw player with camera offset
@@ -159,13 +180,16 @@ function love.draw()
 
     -- Display the coin count
     love.graphics.setColor(1, 1, 1) -- Set color to white
-    love.graphics.print("Coins: " .. coinCount, 10, 10)  -- Display coin count at the top left
+    love.graphics.print("Garbage Collected: " .. coinCount, 10, 10)  -- Display coin count at the top left
+
+    -- Display the plant count
+    love.graphics.print("Plants: " .. plantCount, 10, 30)  -- Display plant count below coin count
 
     -- Optional: Display plant collection message
-    if plantCollected then
-        -- love.graphics.setColor(0, 1, 0) -- Green color
-        love.graphics.print("Plant collected! Bonus awarded!", 10, 30)
-    end
+    -- if plantCollected then
+    --     love.graphics.setColor(0, 1, 0) -- Green color
+    --     love.graphics.print("Plant collected! Bonus awarded!", 10, 30)
+    -- end
 end
 
 function love.keyreleased(key)
@@ -193,11 +217,14 @@ function spawnPlant()
         plantX = background:getWidth() - 50  -- Ensure plant doesn't spawn beyond background
     end
 
-    plant = {
+    plant = {   
         x = plantX,
         y = groundY - plantImage:getHeight(),  -- Position plant on the ground
         width = plantImage:getWidth(),
         height = plantImage:getHeight(),
-        collected = false  -- Track if the plant is collected
+        collected = false  -- This field is now redundant and can be removed
     }
+
+    -- Optional: Reset coin count to allow multiple plant spawns
+    
 end
