@@ -1,10 +1,7 @@
--- main.lua
-
--- Declare variables and tables
 local player
 local playerSpeed = 200
-local gravity = 800  -- Increased gravity for faster falling
-local jumpHeight = -400  -- Adjust jump height
+local gravity = 800
+local jumpHeight = -400
 local isJumping = false
 local groundY
 local background
@@ -12,171 +9,229 @@ local groundImage
 local playerImage
 local coinImage
 local plantImage
-local spaceshipImage  -- Declare variable for spaceship image
-local cameraX = 0 -- Camera position
-local coins = {}  -- Table to hold coins
-local coinCount = 0  -- Track the number of coins collected
-local plant = nil  -- Table to hold plant data
-local spaceship = nil  -- Table to hold spaceship data
+local spaceshipImage
+local rockImage
+local cameraX = 0
+local coins = {}
+local coinCount = 0
+local plant = nil
+local spaceship = nil
+local plantCount = 0
+local plantedTrees = {}
+local plantFloatOffset = 50
+local rocks = {}
 
--- New variables for plant collection and planting
-local plantCount = 0  -- Track the number of plants collected
-local plantedTrees = {}  -- Table to hold planted trees
-
--- Floating offset for planted trees
-local plantFloatOffset = 50  -- Pixels above the ground
-
--- Optional: Load sounds
--- local collectSound
--- local plantSound
--- local plantPlaceSound  -- New sound for planting a tree
+-- Welcome screen variables
+local welcomeScreen = true
+local loadingProgress = 0
+local loading = false
+local welcomeBackground  -- Background image for the welcome screen
 
 function love.load()
     -- Load images
     background = love.graphics.newImage("background.png")
     groundImage = love.graphics.newImage("ground.png")
     playerImage = love.graphics.newImage("player.png")
-    coinImage = love.graphics.newImage("coin.png")  -- Load the coin image
-    plantImage = love.graphics.newImage("plant.png")  -- Load the plant image
-    spaceshipImage = love.graphics.newImage("spaceship.png")  -- Load the spaceship image
+    coinImage = love.graphics.newImage("coin.png")
+    plantImage = love.graphics.newImage("plant.png")
+    spaceshipImage = love.graphics.newImage("spaceship.png")
     treeImage = love.graphics.newImage("tree.png")
-    -- Optional: Load sounds
-    -- collectSound = love.audio.newSource("collect.wav", "static")
-    -- plantSound = love.audio.newSource("plant_collect.wav", "static")
-    -- plantPlaceSound = love.audio.newSource("plant_place.wav", "static")  -- New sound
+    rockImage = love.graphics.newImage("rock.png")
+    
+    -- Load welcome background image
+    welcomeBackground = love.graphics.newImage("welcome_background.jpg")  -- Replace with your actual image path
 
     -- Initialize player properties
+    initializePlayer()
+    initializeLevel()
+end
+
+function initializePlayer()
     player = {
         x = 100,
         y = 400,
         width = playerImage:getWidth(),
         height = playerImage:getHeight(),
-        velocityY = 0,  -- Vertical velocity for jumping
-        facingRight = true  -- Track which direction the player is facing
-    }
-
-    -- Calculate groundY based on ground image height
-    groundY = love.graphics.getHeight() - groundImage:getHeight()
-
-    -- Create coins at specific positions on the ground
-    local numberOfCoins = 10  -- Total coins to spawn
-    for i = 1, numberOfCoins do
-        local coin = {
-            x = math.random(50, background:getWidth() - 50),  -- Random x position within the background width
-            y = groundY - coinImage:getHeight(),  -- Position the coin on the ground
-            width = coinImage:getWidth(),
-            height = coinImage:getHeight(),
-            collected = false  -- Track if the coin is collected
-        }
-        table.insert(coins, coin)  -- Add coin to the coins table
-    end
-
-    -- Spawn spaceship on the ground near the player's spawn point
-    spaceship = {
-        x = 20,  -- Position the spaceship horizontally
-        y = groundY - spaceshipImage:getHeight(),  -- Position it on the ground
-        width = spaceshipImage:getWidth(),
-        height = spaceshipImage:getHeight(),
+        velocityY = 0,
+        facingRight = true
     }
 end
 
-function love.update(dt)
-    -- Horizontal movement
-    if love.keyboard.isDown("right") then
-        player.x = player.x + playerSpeed * dt
-        player.facingRight = true  -- Player is facing right
-    elseif love.keyboard.isDown("left") then
-        player.x = player.x - playerSpeed * dt
-        player.facingRight = false  -- Player is facing left
-    end
+function initializeLevel()
+    groundY = love.graphics.getHeight() - groundImage:getHeight()
 
-    -- Jumping logic
-    if love.keyboard.isDown("space") and not isJumping then
-        player.velocityY = jumpHeight
-        isJumping = true
-    end
-
-    -- Apply gravity
-    if isJumping then
-        player.velocityY = player.velocityY + gravity * dt  -- Apply gravity to the vertical velocity
-        player.y = player.y + player.velocityY * dt  -- Update player Y position based on velocity
-    end
-
-    -- Check if player is on the ground
-    if player.y >= groundY - player.height then
-        player.y = groundY - player.height  -- Set player Y to ground level
-        player.velocityY = 0  -- Reset vertical velocity
-        isJumping = false  -- Allow jumping again
-    end
-
-    -- Update camera position to follow player
-    cameraX = player.x - love.graphics.getWidth() / 2 + player.width / 2
-
-    -- Optional: Limit camera movement
-    cameraX = math.max(0, cameraX) -- Prevent camera from moving left beyond (0, 0)
-    cameraX = math.min(cameraX, background:getWidth() - love.graphics.getWidth()) -- Prevent camera from moving right beyond background width
-
-    -- Check for coin collection
-    for _, coin in ipairs(coins) do
-        if not coin.collected and checkCollision(player, coin) then
-            coin.collected = true  -- Mark coin as collected
-            coinCount = coinCount + 1  -- Increase coin count
-            -- Optional: Play collect sound
-            -- love.audio.play(collectSound)
-            print("Coin collected! Total coins:", coinCount)
-
-            -- Check if coinCount reached 5 and plant hasn't been spawned yet
-            if coinCount%5 == 0 and not plant then
-                spawnPlant()
-                -- Optional: Reset coin count to allow multiple plant spawns
-                
+    -- Create coins at specific positions on the ground
+    local numberOfCoins = 10
+    for i = 1, numberOfCoins do
+        local coin = {
+            x = math.random(50, background:getWidth() - 50),
+            y = groundY - coinImage:getHeight(),
+            width = coinImage:getWidth(),
+            height = coinImage:getHeight(),
+            collected = false
+        }
+        -- Check if the coin is overlapping with any rocks
+        local coinOverlap = false
+        for _, rock in ipairs(rocks) do
+            if checkCollision(coin, rock) then
+                coinOverlap = true
+                break
             end
         end
+        if not coinOverlap then
+            table.insert(coins, coin)
+        end
     end
 
-    -- Check for plant collection
-    if plant and checkCollision(player, plant) then
-        plantCount = plantCount + 1  -- Increment the plant count
-        -- Remove the collected plant
-        plant = nil
-        -- Optional: Play plant collect sound
-        -- love.audio.play(plantSound)
-        -- Optional: Provide additional rewards or feedback
-        print("Plant collected! Total plants:", plantCount)
+    -- Spawn spaceship on the ground
+    spaceship = {
+        x = 20,
+        y = groundY - spaceshipImage:getHeight(),
+        width = spaceshipImage:getWidth(),
+        height = spaceshipImage:getHeight(),
+    }
+
+    -- Create rocks at random positions
+    local numberOfRocks = 5
+    for i = 1, numberOfRocks do
+        local rock = {
+            x = math.random(200, background:getWidth() - 100),
+            y = groundY - rockImage:getHeight(),
+            width = rockImage:getWidth(),
+            height = rockImage:getHeight()
+        }
+        table.insert(rocks, rock)
     end
+end
 
-    -- Animate planted trees to float
-    for _, tree in ipairs(plantedTrees) do
-        local floatSpeed = 50  -- Speed of floating
-        local floatAmplitude = 10  -- How much the tree floats up and down
-
-        tree.offset = tree.offset + tree.direction * floatSpeed * dt
-
-        if tree.offset > floatAmplitude then
-            tree.offset = floatAmplitude
-            tree.direction = -1
-        elseif tree.offset < -floatAmplitude then
-            tree.offset = -floatAmplitude
-            tree.direction = 1
+function love.update(dt)
+    if welcomeScreen then
+        if loading then
+            loadingProgress = loadingProgress + dt
+            if loadingProgress >= 1 then
+                loadingProgress = 1
+                welcomeScreen = false  -- End loading
+            end
+        end
+    else
+        -- Horizontal movement
+        if love.keyboard.isDown("right") then
+            player.x = player.x + playerSpeed * dt
+            player.facingRight = true
+        elseif love.keyboard.isDown("left") then
+            player.x = player.x - playerSpeed * dt
+            player.facingRight = false
         end
 
-        tree.y = tree.baseY + tree.offset
+        -- Jumping logic
+        if love.keyboard.isDown("space") and not isJumping then
+            player.velocityY = jumpHeight
+            isJumping = true
+        end
+
+        -- Apply gravity
+        if isJumping then
+            player.velocityY = player.velocityY + gravity * dt
+            player.y = player.y + player.velocityY * dt
+        end
+
+        -- Check if player is on the ground
+        if player.y >= groundY - player.height then
+            player.y = groundY - player.height
+            player.velocityY = 0
+            isJumping = false
+        end
+
+        -- Update camera position to follow player
+        cameraX = player.x - love.graphics.getWidth() / 2 + player.width / 2
+        cameraX = math.max(0, cameraX)
+        cameraX = math.min(cameraX, background:getWidth() - love.graphics.getWidth())
+
+        -- Check for coin collection
+        for _, coin in ipairs(coins) do
+            if not coin.collected and checkCollision(player, coin) then
+                coin.collected = true
+                coinCount = coinCount + 1
+                print("Coin collected! Total coins:", coinCount)
+
+                -- Check if coinCount reached 5 and plant hasn't been spawned yet
+                if coinCount % 5 == 0 and not plant then
+                    spawnPlant()
+                end
+            end
+        end
+
+        -- Check for plant collection
+        if plant and checkCollision(player, plant) then
+            plantCount = plantCount + 1
+            plant = nil
+            print("Plant collected! Total plants:", plantCount)
+        end
+
+        -- Animate planted trees to float
+        for _, tree in ipairs(plantedTrees) do
+            local floatSpeed = 50
+            local floatAmplitude = 10
+
+            tree.offset = tree.offset + tree.direction * floatSpeed * dt
+
+            if tree.offset > floatAmplitude then
+                tree.offset = floatAmplitude
+                tree.direction = -1
+            elseif tree.offset < -floatAmplitude then
+                tree.offset = -floatAmplitude
+                tree.direction = 1
+            end
+
+            tree.y = tree.baseY + tree.offset
+        end
+
+        -- Check for collision with rocks and respawn if collision happens
+        for _, rock in ipairs(rocks) do
+            if checkCollision(player, rock) then
+                print("Hit a rock! Respawning player...")
+                initializePlayer()
+                break
+            end
+        end
     end
 end
 
 function love.draw()
+    if welcomeScreen then
+        -- Draw welcome background image
+        love.graphics.draw(welcomeBackground, 0, 0)
+
+        -- Draw welcome text
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.printf("Welcome to the Game!", 0, love.graphics.getHeight() / 4, love.graphics.getWidth(), "center")
+        love.graphics.printf("Loading...", 0, love.graphics.getHeight() / 2, love.graphics.getWidth(), "center")
+        
+        -- Draw loading bar
+        love.graphics.setColor(0, 0, 0)
+        love.graphics.rectangle("fill", love.graphics.getWidth() / 4, love.graphics.getHeight() * 3 / 4, love.graphics.getWidth() / 2, 30)
+        love.graphics.setColor(0, 1, 0)
+        love.graphics.rectangle("fill", love.graphics.getWidth() / 4, love.graphics.getHeight() * 3 / 4, (love.graphics.getWidth() / 2) * loadingProgress, 30)
+
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.printf("Press Enter to Start New Game", 0, love.graphics.getHeight() * 3 / 4 + 50, love.graphics.getWidth(), "center")
+    else
+        -- Draw Level 1 content
+        drawLevel()
+    end
+end
+
+function drawLevel()
     -- Draw repeating background
     local backgroundWidth = background:getWidth()
     local screenWidth = love.graphics.getWidth()
 
-    -- Draw the background multiple times
     for i = 0, math.ceil(screenWidth / backgroundWidth) do
         love.graphics.draw(background, i * backgroundWidth - cameraX, 0)
     end
 
     -- Draw repeating ground
     local groundWidth = groundImage:getWidth()
-    -- Calculate how many ground tiles are needed to cover the screen, plus one extra to avoid gaps
     local numGroundTiles = math.ceil(love.graphics.getWidth() / groundWidth) + 1
 
     for i = 0, numGroundTiles - 1 do
@@ -185,7 +240,7 @@ function love.draw()
 
     -- Draw coins
     for _, coin in ipairs(coins) do
-        if not coin.collected then  -- Only draw coins that haven't been collected
+        if not coin.collected then
             love.graphics.draw(coinImage, coin.x - cameraX, coin.y)
         end
     end
@@ -205,94 +260,86 @@ function love.draw()
         love.graphics.draw(treeImage, tree.x - cameraX, tree.y)
     end
 
+    -- Draw rocks
+    for _, rock in ipairs(rocks) do
+        love.graphics.draw(rockImage, rock.x - cameraX, rock.y)
+    end
+
     -- Draw player with camera offset
     if player.facingRight then
         love.graphics.draw(playerImage, player.x - cameraX, player.y)
     else
-        love.graphics.draw(playerImage, player.x - cameraX, player.y, 0, -1, 1) -- Flip the player sprite
+        love.graphics.draw(playerImage, player.x - cameraX, player.y, 0, -1, 1)
     end
 
     -- Display the coin count
-    love.graphics.setColor(1, 1, 1) -- Set color to white
-    love.graphics.print("Garbage Collected: " .. coinCount, 10, 10)  -- Display coin count at the top left
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.print("Garbage Collected: " .. coinCount, 10, 10)
 
     -- Display the plant count
-    love.graphics.print("Plants: " .. plantCount, 10, 30)  -- Display plant count below coin count
+    love.graphics.print("Plants: " .. plantCount, 10, 30)
 
     -- Display the number of planted trees
-    love.graphics.print("Planted Trees: " .. #plantedTrees, 10, 50)  -- Display planted trees count below plants
+    love.graphics.print("Planted Trees: " .. #plantedTrees, 10, 50)
 end
 
 function love.keypressed(key)
-    -- Plant a tree when the player presses 'p'
-    if key == "p" then
-        if plantCount > 0 then
-            plantTree()
-        else
-            print("No plants available to plant!")
+    if welcomeScreen then
+        if key == "return" then
+            loading = true  -- Start loading when Enter is pressed
         end
-    end
-end
-
-function love.keyreleased(key)
-    -- Reset jumping when the space key is released
-    if key == "space" then
-        -- isJumping remains false; handled in the update logic
+    else
+        if key == "p" then
+            if plantCount > 0 then
+                plantTree()
+            else
+                print("No plants available to plant!")
+            end
+        end
     end
 end
 
 -- Function to check for collision between two rectangles
 function checkCollision(a, b)
-    return a.x < b.x + b.width and
-           a.x + a.width > b.x and
-           a.y < b.y + b.height and
-           a.y + a.height > b.y
+    local buffer = 10  -- Adjust this value to shrink the collision radius (increase for a smaller detection area)
+    return a.x + buffer < b.x + b.width - buffer and
+           a.x + a.width - buffer > b.x + buffer and
+           a.y + buffer < b.y + b.height - buffer and
+           a.y + a.height - buffer > b.y + buffer
 end
 
 -- Function to spawn the plant on the ground as a reward
 function spawnPlant()
     print("Spawning plant as a reward!")
 
-    -- Choose a position ahead of the player within the background bounds
-    local plantX = player.x + 200  -- Plant appears 200 pixels ahead of the player
+    local plantX = player.x + 200
     if plantX > background:getWidth() - 50 then
-        plantX = background:getWidth() - 50  -- Ensure plant doesn't spawn beyond background
+        plantX = background:getWidth() - 50
     end
 
     plant = {
         x = plantX,
-        y = groundY - plantImage:getHeight(),  -- Position plant on the ground
+        y = groundY - plantImage:getHeight(),
         width = plantImage:getWidth(),
-        height = plantImage:getHeight(),
-        collected = false  -- This field is now redundant and can be removed
+        height = plantImage:getHeight()
     }
-
-    -- Optional: Reset coin count to allow multiple plant spawns
-    -- coinCount = 0
 end
 
 -- Function to plant a tree at the player's current position
 function plantTree()
-    -- Calculate the planting position
     local treeX = player.x
-    local baseY = groundY - plantImage:getHeight() - plantFloatOffset  -- Base Y for floating
+    local baseY = groundY - plantImage:getHeight() - plantFloatOffset
 
-    -- Add the tree to the plantedTrees table with animation properties
     table.insert(plantedTrees, {
         x = treeX,
-        baseY = baseY,  -- Base Y position
-        y = baseY,       -- Current Y position
+        baseY = baseY,
+        y = baseY,
         width = plantImage:getWidth(),
         height = plantImage:getHeight(),
-        offset = 0,      -- Current offset for animation
-        direction = 1    -- Direction of movement (1 for up, -1 for down)
+        offset = 0,
+        direction = 1
     })
 
-    -- Decrement the plant count as one plant has been used
     plantCount = plantCount - 1
-
-    -- Optional: Play plant placement sound
-    -- love.audio.play(plantPlaceSound)
-
     print("Tree planted! Total planted trees:", #plantedTrees)
 end
