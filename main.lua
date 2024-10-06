@@ -1,3 +1,4 @@
+-- **Game Variables**
 local player
 local playerSpeed = 200
 local gravity = 800
@@ -11,7 +12,9 @@ local coinImage
 local plantImage
 local spaceshipImage
 local rockImage
+local treeImage
 local cameraX = 0
+
 local coins = {}
 local coinCount = 0
 local plant = nil
@@ -21,14 +24,21 @@ local plantedTrees = {}
 local plantFloatOffset = 50
 local rocks = {}
 
--- Welcome screen variables
+-- **Welcome Screen Variables**
 local welcomeScreen = true
 local loadingProgress = 0
 local loading = false
 local welcomeBackground  -- Background image for the welcome screen
 
+-- **Prompt Variables**
+local showPlantPrompt = false
+local promptText = "Press P to plant a tree"
+local promptFont
+local promptColor = {1, 1, 1, 1}  -- White color with full opacity
+
+-- **Love2D Load Function**
 function love.load()
-    -- Load images with error handling
+    -- **Load Images**
     background = love.graphics.newImage("background.png")
     groundImage = love.graphics.newImage("ground.png")
     playerImage = love.graphics.newImage("player.png")
@@ -38,14 +48,19 @@ function love.load()
     treeImage = love.graphics.newImage("tree.png")
     rockImage = love.graphics.newImage("rock.png")
 
-    -- Load welcome background image
-    welcomeBackground = love.graphics.newImage("welcome_background.jpg")  -- Replace with your actual image path
+    -- **Load Welcome Background Image**
+    welcomeBackground = love.graphics.newImage("welcome_background.jpg")  -- Ensure this path is correct
 
-    -- Initialize player properties
+    -- **Set Prompt Font (Optional)**
+    promptFont = love.graphics.newFont(14)
+    love.graphics.setFont(promptFont)
+
+    -- **Initialize Player and Level**
     initializePlayer()
     initializeLevel()
 end
 
+-- **Initialize Player Function**
 function initializePlayer()
     player = {
         x = 100,
@@ -57,28 +72,29 @@ function initializePlayer()
     }
 end
 
+-- **Initialize Level Function**
 function initializeLevel()
     groundY = love.graphics.getHeight() - groundImage:getHeight()
 
-    -- Create rocks at random positions first
+    -- **Spawn Rocks First to Avoid Overlaps with Coins**
     local numberOfRocks = 5
     for i = 1, numberOfRocks do
-        local rock = spawnObject("rock", rocks, {x = 200, y = groundY - rockImage:getHeight(), width = rockImage:getWidth(), height = rockImage:getHeight()}, background:getWidth() - 100, groundY - rockImage:getHeight())
+        local rock = spawnObject("rock")
         if rock then
             table.insert(rocks, rock)
         end
     end
 
-    -- Create coins at specific positions on the ground
+    -- **Spawn Coins After Rocks to Avoid Overlaps**
     local numberOfCoins = 10
     for i = 1, numberOfCoins do
-        local coin = spawnObject("coin", coins, {x = math.random(50, background:getWidth() - 50), y = groundY - coinImage:getHeight(), width = coinImage:getWidth(), height = coinImage:getHeight()}, background:getWidth() - 50, groundY - coinImage:getHeight(), {"rock", "coin"})
+        local coin = spawnObject("coin")
         if coin then
             table.insert(coins, coin)
         end
     end
 
-    -- Spawn spaceship on the ground
+    -- **Spawn Spaceship on the Ground**
     spaceship = {
         x = 20,
         y = groundY - spaceshipImage:getHeight(),
@@ -87,7 +103,16 @@ function initializeLevel()
     }
 end
 
--- Helper function to check overlap with multiple object types
+-- **Helper Function: Check Collision Between Two Objects**
+function checkCollision(a, b)
+    local buffer = 10  -- Adjust buffer as needed
+    return a.x + buffer < b.x + b.width - buffer and
+           a.x + a.width - buffer > b.x + buffer and
+           a.y + buffer < b.y + b.height - buffer and
+           a.y + a.height - buffer > b.y + buffer
+end
+
+-- **Helper Function: Check Overlapping with a List of Objects**
 function isOverlapping(obj, objectList)
     for _, other in ipairs(objectList) do
         if checkCollision(obj, other) then
@@ -97,37 +122,41 @@ function isOverlapping(obj, objectList)
     return false
 end
 
--- General-purpose spawn function to avoid overlaps
-function spawnObject(type, list, obj, maxX, groundY, avoidTypes)
+-- **Helper Function: Spawn Objects Without Overlapping**
+function spawnObject(type)
     local maxAttempts = 100
     local attempt = 0
+    local obj = {}
     while attempt < maxAttempts do
         attempt = attempt + 1
-        obj.x = math.random(50, maxX)
-        obj.y = groundY
-
-        local overlapping = false
-
         if type == "rock" then
-            -- Check against coins and existing rocks
-            if isOverlapping(obj, coins) or isOverlapping(obj, list) then
-                overlapping = true
+            obj = {
+                x = math.random(200, background:getWidth() - 100),
+                y = groundY - rockImage:getHeight(),
+                width = rockImage:getWidth(),
+                height = rockImage:getHeight()
+            }
+            if not isOverlapping(obj, rocks) and not isOverlapping(obj, coins) and not isOverlapping(obj, plantedTrees) then
+                return obj
             end
         elseif type == "coin" then
-            -- Check against rocks and existing coins
-            if isOverlapping(obj, rocks) or isOverlapping(obj, list) then
-                overlapping = true
+            obj = {
+                x = math.random(50, background:getWidth() - 50),
+                y = groundY - coinImage:getHeight(),
+                width = coinImage:getWidth(),
+                height = coinImage:getHeight(),
+                collected = false
+            }
+            if not isOverlapping(obj, rocks) and not isOverlapping(obj, coins) then
+                return obj
             end
-        end
-
-        if not overlapping then
-            return obj
         end
     end
     print("Failed to spawn a non-overlapping " .. type)
     return nil
 end
 
+-- **Love2D Update Function**
 function love.update(dt)
     if welcomeScreen then
         if loading then
@@ -138,7 +167,7 @@ function love.update(dt)
             end
         end
     else
-        -- Horizontal movement
+        -- **Player Movement**
         if love.keyboard.isDown("right") then
             player.x = player.x + playerSpeed * dt
             player.facingRight = true
@@ -147,52 +176,53 @@ function love.update(dt)
             player.facingRight = false
         end
 
-        -- Jumping logic
+        -- **Player Jumping Logic**
         if love.keyboard.isDown("space") and not isJumping then
             player.velocityY = jumpHeight
             isJumping = true
         end
 
-        -- Apply gravity
+        -- **Apply Gravity**
         if isJumping then
             player.velocityY = player.velocityY + gravity * dt
             player.y = player.y + player.velocityY * dt
         end
 
-        -- Check if player is on the ground
+        -- **Check if Player is on the Ground**
         if player.y >= groundY - player.height then
             player.y = groundY - player.height
             player.velocityY = 0
             isJumping = false
         end
 
-        -- Update camera position to follow player
+        -- **Update Camera Position to Follow Player**
         cameraX = player.x - love.graphics.getWidth() / 2 + player.width / 2
         cameraX = math.max(0, cameraX)
         cameraX = math.min(cameraX, background:getWidth() - love.graphics.getWidth())
 
-        -- Check for coin collection
+        -- **Check for Coin Collection**
         for _, coin in ipairs(coins) do
             if not coin.collected and checkCollision(player, coin) then
                 coin.collected = true
                 coinCount = coinCount + 1
                 print("Coin collected! Total coins:", coinCount)
 
-                -- Check if coinCount reached multiples of 5 and plant hasn't been spawned yet
+                -- **Check if Coin Count Reached Multiples of 5 and Plant is Not Spawned Yet**
                 if coinCount % 5 == 0 and not plant then
                     spawnPlant()
                 end
             end
         end
 
-        -- Check for plant collection
+        -- **Check for Plant Collection**
         if plant and checkCollision(player, plant) then
             plantCount = plantCount + 1
             plant = nil
+            showPlantPrompt = true  -- Show prompt when plant is collected
             print("Plant collected! Total plants:", plantCount)
         end
 
-        -- Animate planted trees to float
+        -- **Animate Planted Trees to Float**
         for _, tree in ipairs(plantedTrees) do
             local floatSpeed = 50
             local floatAmplitude = 10
@@ -210,56 +240,60 @@ function love.update(dt)
             tree.y = tree.baseY + tree.offset
         end
 
-        -- Check for collision with rocks and respawn if collision happens
+        -- **Check for Collision with Rocks and Respawn if Collision Happens**
         for _, rock in ipairs(rocks) do
             if checkCollision(player, rock) then
                 print("Hit a rock! Respawning player and rocks...")
                 initializePlayer()
                 respawnRocks()
-                break
+                break  -- Exit the loop after respawning
             end
         end
     end
 end
 
+-- **Respawn Rocks Function**
 function respawnRocks()
     rocks = {}  -- Clear existing rocks
 
     local numberOfRocks = 5
     for i = 1, numberOfRocks do
-        local rock = spawnObject("rock", rocks, {x = 0, y = groundY - rockImage:getHeight(), width = rockImage:getWidth(), height = rockImage:getHeight()}, background:getWidth() - 100, groundY - rockImage:getHeight())
+        local rock = spawnObject("rock")
         if rock then
             table.insert(rocks, rock)
         end
     end
 end
 
+-- **Love2D Draw Function**
 function love.draw()
     if welcomeScreen then
-        -- Draw welcome background image
+        -- **Draw Welcome Background Image**
         love.graphics.draw(welcomeBackground, 0, 0)
 
-        -- Draw welcome text
+        -- **Draw Welcome Text**
         love.graphics.setColor(1, 1, 1)
         love.graphics.printf("Welcome to the Game!", 0, love.graphics.getHeight() / 4, love.graphics.getWidth(), "center")
         love.graphics.printf("Loading...", 0, love.graphics.getHeight() / 2, love.graphics.getWidth(), "center")
-        
-        -- Draw loading bar
+
+        -- **Draw Loading Bar**
         love.graphics.setColor(0, 0, 0)
         love.graphics.rectangle("fill", love.graphics.getWidth() / 4, love.graphics.getHeight() * 3 / 4, love.graphics.getWidth() / 2, 30)
         love.graphics.setColor(0, 1, 0)
         love.graphics.rectangle("fill", love.graphics.getWidth() / 4, love.graphics.getHeight() * 3 / 4, (love.graphics.getWidth() / 2) * loadingProgress, 30)
 
+        -- **Draw Start Game Prompt**
         love.graphics.setColor(1, 1, 1)
         love.graphics.printf("Press Enter to Start New Game", 0, love.graphics.getHeight() * 3 / 4 + 50, love.graphics.getWidth(), "center")
     else
-        -- Draw Level 1 content
+        -- **Draw Game Level**
         drawLevel()
     end
 end
 
+-- **Draw Level Function**
 function drawLevel()
-    -- Draw repeating background
+    -- **Draw Repeating Background**
     local backgroundWidth = background:getWidth()
     local screenWidth = love.graphics.getWidth()
 
@@ -267,7 +301,7 @@ function drawLevel()
         love.graphics.draw(background, i * backgroundWidth - cameraX, 0)
     end
 
-    -- Draw repeating ground
+    -- **Draw Repeating Ground**
     local groundWidth = groundImage:getWidth()
     local numGroundTiles = math.ceil(love.graphics.getWidth() / groundWidth) + 1
 
@@ -275,51 +309,55 @@ function drawLevel()
         love.graphics.draw(groundImage, i * groundWidth - (cameraX % groundWidth), groundY)
     end
 
-    -- Draw coins
+    -- **Draw Coins**
     for _, coin in ipairs(coins) do
         if not coin.collected then
             love.graphics.draw(coinImage, coin.x - cameraX, coin.y)
         end
     end
 
-    -- Draw plant if it exists
+    -- **Draw Plant if Exists**
     if plant then
         love.graphics.draw(plantImage, plant.x - cameraX, plant.y)
     end
 
-    -- Draw spaceship on the ground
+    -- **Draw Spaceship on the Ground**
     if spaceship then
         love.graphics.draw(spaceshipImage, spaceship.x - cameraX, spaceship.y)
     end
 
-    -- Draw planted trees
+    -- **Draw Planted Trees**
     for _, tree in ipairs(plantedTrees) do
         love.graphics.draw(treeImage, tree.x - cameraX, tree.y)
     end
 
-    -- Draw rocks
+    -- **Draw Rocks**
     for _, rock in ipairs(rocks) do
         love.graphics.draw(rockImage, rock.x - cameraX, rock.y)
     end
 
-    -- Draw player with camera offset
+    -- **Draw Player with Camera Offset**
     if player.facingRight then
         love.graphics.draw(playerImage, player.x - cameraX, player.y)
     else
-        love.graphics.draw(playerImage, player.x - cameraX, player.y, 0, -1, 1)
+        love.graphics.draw(playerImage, player.x - cameraX, player.y, 0, -1, 1)  -- Flip horizontally
     end
 
-    -- Display the coin count
+    -- **Set Text Color to White**
     love.graphics.setColor(1, 1, 1)
+
+    -- **Display UI Texts**
     love.graphics.print("Garbage Collected: " .. coinCount, 10, 10)
-
-    -- Display the plant count
     love.graphics.print("Plants: " .. plantCount, 10, 30)
-
-    -- Display the number of planted trees
     love.graphics.print("Planted Trees: " .. #plantedTrees, 10, 50)
+
+    -- **Display Planting Prompt if Applicable**
+    if showPlantPrompt and plantCount > 0 then
+        love.graphics.printf(promptText, 0, 70, love.graphics.getWidth(), "right")
+    end
 end
 
+-- **Love2D Keypressed Function**
 function love.keypressed(key)
     if welcomeScreen then
         if key == "return" then
@@ -336,16 +374,7 @@ function love.keypressed(key)
     end
 end
 
--- Function to check for collision between two rectangles
-function checkCollision(a, b)
-    local buffer = 10  -- Adjust this value to shrink the collision radius (increase for a smaller detection area)
-    return a.x + buffer < b.x + b.width - buffer and
-           a.x + a.width - buffer > b.x + buffer and
-           a.y + buffer < b.y + b.height - buffer and
-           a.y + a.height - buffer > b.y + buffer
-end
-
--- Function to spawn the plant on the ground as a reward
+-- **Function to Spawn Plant as a Reward**
 function spawnPlant()
     print("Spawning plant as a reward!")
 
@@ -362,11 +391,11 @@ function spawnPlant()
         height = plantImage:getHeight()
     }
 
-    -- Ensure the plant does not overlap with rocks or coins
+    -- **Ensure the Plant Does Not Overlap with Rocks or Coins**
     if not isOverlapping(newPlant, rocks) and not isOverlapping(newPlant, coins) then
         plant = newPlant
     else
-        -- Find a non-overlapping position
+        -- **Find a Non-Overlapping Position**
         local maxAttempts = 100
         local attempt = 0
         local placed = false
@@ -386,7 +415,7 @@ function spawnPlant()
     end
 end
 
--- Function to plant a tree at the player's current position
+-- **Function to Plant a Tree**
 function plantTree()
     local treeX = player.x
     local baseY = groundY - plantImage:getHeight() - plantFloatOffset
@@ -401,13 +430,14 @@ function plantTree()
         direction = 1
     }
 
-    -- Ensure the tree does not overlap with rocks or existing trees
+    -- **Ensure the Tree Does Not Overlap with Rocks or Existing Trees**
     if not isOverlapping(newTree, rocks) and not isOverlapping(newTree, plantedTrees) then
         table.insert(plantedTrees, newTree)
         plantCount = plantCount - 1
         print("Tree planted! Total planted trees:", #plantedTrees)
+        showPlantPrompt = false  -- Hide the prompt after planting
     else
-        -- Find a non-overlapping position
+        -- **Find a Non-Overlapping Position**
         local maxAttempts = 100
         local attempt = 0
         local placed = false
@@ -421,6 +451,7 @@ function plantTree()
                 plantCount = plantCount - 1
                 print("Tree planted! Total planted trees:", #plantedTrees)
                 placed = true
+                showPlantPrompt = false  -- Hide the prompt after planting
             end
         end
 
