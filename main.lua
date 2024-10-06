@@ -28,7 +28,7 @@ local loading = false
 local welcomeBackground  -- Background image for the welcome screen
 
 function love.load()
-    -- Load images
+    -- Load images with error handling
     background = love.graphics.newImage("background.png")
     groundImage = love.graphics.newImage("ground.png")
     playerImage = love.graphics.newImage("player.png")
@@ -37,7 +37,7 @@ function love.load()
     spaceshipImage = love.graphics.newImage("spaceship.png")
     treeImage = love.graphics.newImage("tree.png")
     rockImage = love.graphics.newImage("rock.png")
-    
+
     -- Load welcome background image
     welcomeBackground = love.graphics.newImage("welcome_background.jpg")  -- Replace with your actual image path
 
@@ -60,25 +60,20 @@ end
 function initializeLevel()
     groundY = love.graphics.getHeight() - groundImage:getHeight()
 
+    -- Create rocks at random positions first
+    local numberOfRocks = 5
+    for i = 1, numberOfRocks do
+        local rock = spawnObject("rock", rocks, {x = 200, y = groundY - rockImage:getHeight(), width = rockImage:getWidth(), height = rockImage:getHeight()}, background:getWidth() - 100, groundY - rockImage:getHeight())
+        if rock then
+            table.insert(rocks, rock)
+        end
+    end
+
     -- Create coins at specific positions on the ground
     local numberOfCoins = 10
     for i = 1, numberOfCoins do
-        local coin = {
-            x = math.random(50, background:getWidth() - 50),
-            y = groundY - coinImage:getHeight(),
-            width = coinImage:getWidth(),
-            height = coinImage:getHeight(),
-            collected = false
-        }
-        -- Check if the coin is overlapping with any rocks
-        local coinOverlap = false
-        for _, rock in ipairs(rocks) do
-            if checkCollision(coin, rock) then
-                coinOverlap = true
-                break
-            end
-        end
-        if not coinOverlap then
+        local coin = spawnObject("coin", coins, {x = math.random(50, background:getWidth() - 50), y = groundY - coinImage:getHeight(), width = coinImage:getWidth(), height = coinImage:getHeight()}, background:getWidth() - 50, groundY - coinImage:getHeight(), {"rock", "coin"})
+        if coin then
             table.insert(coins, coin)
         end
     end
@@ -90,18 +85,47 @@ function initializeLevel()
         width = spaceshipImage:getWidth(),
         height = spaceshipImage:getHeight(),
     }
+end
 
-    -- Create rocks at random positions
-    local numberOfRocks = 5
-    for i = 1, numberOfRocks do
-        local rock = {
-            x = math.random(200, background:getWidth() - 100),
-            y = groundY - rockImage:getHeight(),
-            width = rockImage:getWidth(),
-            height = rockImage:getHeight()
-        }
-        table.insert(rocks, rock)
+-- Helper function to check overlap with multiple object types
+function isOverlapping(obj, objectList)
+    for _, other in ipairs(objectList) do
+        if checkCollision(obj, other) then
+            return true
+        end
     end
+    return false
+end
+
+-- General-purpose spawn function to avoid overlaps
+function spawnObject(type, list, obj, maxX, groundY, avoidTypes)
+    local maxAttempts = 100
+    local attempt = 0
+    while attempt < maxAttempts do
+        attempt = attempt + 1
+        obj.x = math.random(50, maxX)
+        obj.y = groundY
+
+        local overlapping = false
+
+        if type == "rock" then
+            -- Check against coins and existing rocks
+            if isOverlapping(obj, coins) or isOverlapping(obj, list) then
+                overlapping = true
+            end
+        elseif type == "coin" then
+            -- Check against rocks and existing coins
+            if isOverlapping(obj, rocks) or isOverlapping(obj, list) then
+                overlapping = true
+            end
+        end
+
+        if not overlapping then
+            return obj
+        end
+    end
+    print("Failed to spawn a non-overlapping " .. type)
+    return nil
 end
 
 function love.update(dt)
@@ -154,7 +178,7 @@ function love.update(dt)
                 coinCount = coinCount + 1
                 print("Coin collected! Total coins:", coinCount)
 
-                -- Check if coinCount reached 5 and plant hasn't been spawned yet
+                -- Check if coinCount reached multiples of 5 and plant hasn't been spawned yet
                 if coinCount % 5 == 0 and not plant then
                     spawnPlant()
                 end
@@ -189,10 +213,23 @@ function love.update(dt)
         -- Check for collision with rocks and respawn if collision happens
         for _, rock in ipairs(rocks) do
             if checkCollision(player, rock) then
-                print("Hit a rock! Respawning player...")
+                print("Hit a rock! Respawning player and rocks...")
                 initializePlayer()
+                respawnRocks()
                 break
             end
+        end
+    end
+end
+
+function respawnRocks()
+    rocks = {}  -- Clear existing rocks
+
+    local numberOfRocks = 5
+    for i = 1, numberOfRocks do
+        local rock = spawnObject("rock", rocks, {x = 0, y = groundY - rockImage:getHeight(), width = rockImage:getWidth(), height = rockImage:getHeight()}, background:getWidth() - 100, groundY - rockImage:getHeight())
+        if rock then
+            table.insert(rocks, rock)
         end
     end
 end
@@ -312,17 +349,41 @@ end
 function spawnPlant()
     print("Spawning plant as a reward!")
 
+    local maxX = background:getWidth() - plantImage:getWidth() - 50
     local plantX = player.x + 200
-    if plantX > background:getWidth() - 50 then
-        plantX = background:getWidth() - 50
+    if plantX > maxX then
+        plantX = maxX
     end
 
-    plant = {
+    local newPlant = {
         x = plantX,
         y = groundY - plantImage:getHeight(),
         width = plantImage:getWidth(),
         height = plantImage:getHeight()
     }
+
+    -- Ensure the plant does not overlap with rocks or coins
+    if not isOverlapping(newPlant, rocks) and not isOverlapping(newPlant, coins) then
+        plant = newPlant
+    else
+        -- Find a non-overlapping position
+        local maxAttempts = 100
+        local attempt = 0
+        local placed = false
+        while attempt < maxAttempts and not placed do
+            attempt = attempt + 1
+            newPlant.x = math.random(50, maxX)
+            if not isOverlapping(newPlant, rocks) and not isOverlapping(newPlant, coins) and not (plant and checkCollision(newPlant, plant)) then
+                plant = newPlant
+                placed = true
+            end
+        end
+
+        if not placed then
+            print("Failed to spawn a non-overlapping plant.")
+            plant = nil
+        end
+    end
 end
 
 -- Function to plant a tree at the player's current position
@@ -330,7 +391,7 @@ function plantTree()
     local treeX = player.x
     local baseY = groundY - plantImage:getHeight() - plantFloatOffset
 
-    table.insert(plantedTrees, {
+    local newTree = {
         x = treeX,
         baseY = baseY,
         y = baseY,
@@ -338,8 +399,33 @@ function plantTree()
         height = plantImage:getHeight(),
         offset = 0,
         direction = 1
-    })
+    }
 
-    plantCount = plantCount - 1
-    print("Tree planted! Total planted trees:", #plantedTrees)
+    -- Ensure the tree does not overlap with rocks or existing trees
+    if not isOverlapping(newTree, rocks) and not isOverlapping(newTree, plantedTrees) then
+        table.insert(plantedTrees, newTree)
+        plantCount = plantCount - 1
+        print("Tree planted! Total planted trees:", #plantedTrees)
+    else
+        -- Find a non-overlapping position
+        local maxAttempts = 100
+        local attempt = 0
+        local placed = false
+        while attempt < maxAttempts and not placed do
+            attempt = attempt + 1
+            newTree.x = math.random(50, background:getWidth() - 50)
+            if not isOverlapping(newTree, rocks) and not isOverlapping(newTree, plantedTrees) then
+                newTree.baseY = groundY - plantImage:getHeight() - plantFloatOffset
+                newTree.y = newTree.baseY
+                table.insert(plantedTrees, newTree)
+                plantCount = plantCount - 1
+                print("Tree planted! Total planted trees:", #plantedTrees)
+                placed = true
+            end
+        end
+
+        if not placed then
+            print("Failed to plant a non-overlapping tree.")
+        end
+    end
 end
