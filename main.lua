@@ -24,17 +24,19 @@ local plantedTrees = {}
 local plantFloatOffset = 50
 local rocks = {}
 
--- **Welcome Screen Variables**
+-- **Game State Variables**
 local welcomeScreen = true
 local loadingProgress = 0
 local loading = false
 local welcomeBackground  -- Background image for the welcome screen
 
--- **Prompt Variables**
 local showPlantPrompt = false
 local promptText = "Press P to plant a tree"
 local promptFont
 local promptColor = {1, 1, 1, 1}  -- White color with full opacity
+
+local gameOver = false  -- New Game Over State
+local maxPlantedTrees = 2  -- Number of trees to plant before game over
 
 -- **Love2D Load Function**
 function love.load()
@@ -166,6 +168,9 @@ function love.update(dt)
                 welcomeScreen = false  -- End loading
             end
         end
+    elseif gameOver then
+        -- **Game Over State: No Updates Needed**
+        -- You can add animations or other effects here if desired
     else
         -- **Player Movement**
         if love.keyboard.isDown("right") then
@@ -285,6 +290,23 @@ function love.draw()
         -- **Draw Start Game Prompt**
         love.graphics.setColor(1, 1, 1)
         love.graphics.printf("Press Enter to Start New Game", 0, love.graphics.getHeight() * 3 / 4 + 50, love.graphics.getWidth(), "center")
+    elseif gameOver then
+        -- **Draw Game Over Screen**
+        love.graphics.setColor(0, 0, 0, 0.7)  -- Semi-transparent black background
+        love.graphics.rectangle("fill", 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
+
+        love.graphics.setColor(1, 0, 0)  -- Red color for "GAME OVER" text
+        local gameOverText = "GAME OVER"
+        local font = love.graphics.newFont(48)
+        love.graphics.setFont(font)
+        love.graphics.printf(gameOverText, 0, love.graphics.getHeight() / 2 - 24, love.graphics.getWidth(), "center")
+
+        -- **Optional: Restart Prompt**
+        love.graphics.setColor(1, 1, 1)  -- White color for prompt
+        local prompt = "Press R to Restart or Q to Quit"
+        local smallFont = love.graphics.newFont(24)
+        love.graphics.setFont(smallFont)
+        love.graphics.printf(prompt, 0, love.graphics.getHeight() / 2 + 40, love.graphics.getWidth(), "center")
     else
         -- **Draw Game Level**
         drawLevel()
@@ -363,6 +385,12 @@ function love.keypressed(key)
         if key == "return" then
             loading = true  -- Start loading when Enter is pressed
         end
+    elseif gameOver then
+        if key == "r" then
+            restartGame()
+        elseif key == "q" then
+            love.event.quit()
+        end
     else
         if key == "p" then
             if plantCount > 0 then
@@ -435,6 +463,12 @@ function plantTree()
         table.insert(plantedTrees, newTree)
         plantCount = plantCount - 1
         print("Tree planted! Total planted trees:", #plantedTrees)
+
+        -- **Check if Maximum Planted Trees Reached**
+        if #plantedTrees >= maxPlantedTrees then
+            gameOver = true
+        end
+
         showPlantPrompt = false  -- Hide the prompt after planting
     else
         -- **Find a Non-Overlapping Position**
@@ -450,6 +484,12 @@ function plantTree()
                 table.insert(plantedTrees, newTree)
                 plantCount = plantCount - 1
                 print("Tree planted! Total planted trees:", #plantedTrees)
+
+                -- **Check if Maximum Planted Trees Reached**
+                if #plantedTrees >= maxPlantedTrees then
+                    gameOver = true
+                end
+
                 placed = true
                 showPlantPrompt = false  -- Hide the prompt after planting
             end
@@ -459,4 +499,23 @@ function plantTree()
             print("Failed to plant a non-overlapping tree.")
         end
     end
+end
+
+-- **Function to Restart the Game**
+function restartGame()
+    -- **Reset All Game Variables**
+    coinCount = 0
+    plantCount = 0
+    plantedTrees = {}
+    coins = {}
+    rocks = {}
+    plant = nil
+    gameOver = false
+    showPlantPrompt = false
+
+    -- **Re-initialize Player and Level**
+    initializePlayer()
+    initializeLevel()
+
+    print("Game Restarted!")
 end
