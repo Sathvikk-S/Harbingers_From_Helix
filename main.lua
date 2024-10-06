@@ -278,7 +278,7 @@ function love.draw()
 
         -- **Draw Welcome Text**
         love.graphics.setColor(1, 1, 1)
-        love.graphics.printf("Welcome to the Game!", 0, love.graphics.getHeight() / 4, love.graphics.getWidth(), "center")
+        love.graphics.printf("GLOBE Rebooted", 0, love.graphics.getHeight() / 4, love.graphics.getWidth(), "center")
         love.graphics.printf("Loading...", 0, love.graphics.getHeight() / 2, love.graphics.getWidth(), "center")
 
         -- **Draw Loading Bar**
@@ -519,3 +519,5 @@ function restartGame()
 
     print("Game Restarted!")
 end
+
+-- this is a comment
