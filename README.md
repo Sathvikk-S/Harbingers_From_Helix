@@ -46,3 +46,7 @@ We took on this challenge to expand our skills and develop something meaningful 
 ## Target Audience
 
 While designed for players of all ages, *Harbingers of Helix* is especially geared towards young audiences and educators. The game empowers players to connect their in-game actions with real-world environmental challenges, inspiring meaningful change.
+
+## Learn More
+
+Visit our project on the [NASA Space Apps Challenge 2024](https://www.spaceappschallenge.org/nasa-space-apps-2024/find-a-team/harbingers-of-helix/?tab=project).
