@@ -1,6 +1,6 @@
 # Harbingers of Helix: GLOBE Rebooted
 
-*Harbingers of Helix* is an engaging and educational environmental game developed by a group of undergraduate students specializing in Computer Science and Engineering. Our team brings together diverse expertise in Cyber Security, Full Stack Development, and Machine Learning, united by the goal of learning something new and impactful.
+*GLOBE Rebooted* is an engaging and educational environmental game developed by a group of undergraduate students specializing in Computer Science and Engineering. Our team brings together diverse expertise in Cyber Security, Full Stack Development, and Machine Learning, united by the goal of learning something new and impactful.
 
 ## About the Game
 
